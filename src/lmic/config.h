@@ -5,8 +5,12 @@
 // gcc commandline. Since Arduino does not allow easily modifying the
 // compiler commandline, use this file instead.
 
-#define CFG_eu868 1
-//#define CFG_us915 1
+//#define CFG_eu868 1
+#define CFG_us915 1
+#define CFG_au915 1
+
+#define RX1DROFFSET 3
+
 // This is the SX1272/SX1273 radio, which is also used on the HopeRF
 // RFM92 boards.
 //#define CFG_sx1272_radio 1
@@ -25,12 +29,12 @@
 // enable more verbose output. Make sure that printf is actually
 // configured (e.g. on AVR it is not by default), otherwise using it can
 // cause crashing.
-#define LMIC_DEBUG_LEVEL 0
+#define LMIC_DEBUG_LEVEL 1
 
 // Enable this to allow using printf() to print to the given serial port
 // (or any other Print object). This can be easy for debugging. The
 // current implementation only works on AVR, though.
-//#define LMIC_PRINTF_TO Serial
+#define LMIC_PRINTF_TO Serial
 
 // Any runtime assertion failures are printed to this serial port (or
 // any other Print object). If this is unset, any failures just silently
@@ -40,19 +44,19 @@
 // Uncomment this to disable all code related to joining
 //#define DISABLE_JOIN
 // Uncomment this to disable all code related to ping
-//#define DISABLE_PING
+#define DISABLE_PING
 // Uncomment this to disable all code related to beacon tracking.
 // Requires ping to be disabled too
-//#define DISABLE_BEACONS
+#define DISABLE_BEACONS
 
 // Uncomment these to disable the corresponding MAC commands.
 // Class A
-//#define DISABLE_MCMD_DCAP_REQ // duty cycle cap
+#define DISABLE_MCMD_DCAP_REQ // duty cycle cap
 //#define DISABLE_MCMD_DN2P_SET // 2nd DN window param
-//#define DISABLE_MCMD_SNCH_REQ // set new channel
+#define DISABLE_MCMD_SNCH_REQ // set new channel
 // Class B
-//#define DISABLE_MCMD_PING_SET // set ping freq, automatically disabled by DISABLE_PING
-//#define DISABLE_MCMD_BCNI_ANS // next beacon start, automatical disabled by DISABLE_BEACON
+#define DISABLE_MCMD_PING_SET // set ping freq, automatically disabled by DISABLE_PING
+#define DISABLE_MCMD_BCNI_ANS // next beacon start, automatical disabled by DISABLE_BEACON
 
 // In LoRaWAN, a gateway applies I/Q inversion on TX, and nodes do the
 // same on RX. This ensures that gateways can talk to nodes and vice

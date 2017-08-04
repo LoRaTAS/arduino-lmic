@@ -241,20 +241,20 @@ CONST_TABLE(u1_t, maxFrameLens) [] = { 24,66,142,255,255,255,255,255,  66,142 };
 
 CONST_TABLE(u1_t, _DR2RPS_CRC)[] = {
     ILLEGAL_RPS,
-    MAKERPS(SF10, BW125, CR_4_5, 0, 0),
-    MAKERPS(SF9 , BW125, CR_4_5, 0, 0),
-    MAKERPS(SF8 , BW125, CR_4_5, 0, 0),
-    MAKERPS(SF7 , BW125, CR_4_5, 0, 0),
-    MAKERPS(SF8 , BW500, CR_4_5, 0, 0),
+    MAKERPS(SF10, BW125, CR_4_5, 0, 0), 
+    MAKERPS(SF9 , BW125, CR_4_5, 0, 0), 
+    MAKERPS(SF8 , BW125, CR_4_5, 0, 0), 
+    MAKERPS(SF7 , BW125, CR_4_5, 0, 0), 
+    MAKERPS(SF8 , BW500, CR_4_5, 0, 0), 
     ILLEGAL_RPS ,
     ILLEGAL_RPS ,
     ILLEGAL_RPS ,
-    MAKERPS(SF12, BW500, CR_4_5, 0, 0),
-    MAKERPS(SF11, BW500, CR_4_5, 0, 0),
-    MAKERPS(SF10, BW500, CR_4_5, 0, 0),
-    MAKERPS(SF9 , BW500, CR_4_5, 0, 0),
-    MAKERPS(SF8 , BW500, CR_4_5, 0, 0),
-    MAKERPS(SF7 , BW500, CR_4_5, 0, 0),
+    MAKERPS(SF12, BW500, CR_4_5, 0, 0), 
+    MAKERPS(SF11, BW500, CR_4_5, 0, 0), 
+    MAKERPS(SF10, BW500, CR_4_5, 0, 0), 
+    MAKERPS(SF9 , BW500, CR_4_5, 0, 0), 
+    MAKERPS(SF8 , BW500, CR_4_5, 0, 0), 
+    MAKERPS(SF7 , BW500, CR_4_5, 0, 0), 
     ILLEGAL_RPS
 };
 
@@ -876,23 +876,35 @@ static void setBcnRxParams (void) {
 }
 #endif // !DISABLE_BEACONS
 
-#define setRx1Params() {                                                \
-    LMIC.freq = US915_500kHz_DNFBASE + (LMIC.txChnl & 0x7) * US915_500kHz_DNFSTEP; \
-    if( /* TX datarate */LMIC.dndr < DR_SF8C )                          \
-        LMIC.dndr += DR_SF10CR - DR_SF10;                               \
-    else if( LMIC.dndr == DR_SF8C )                                     \
-        LMIC.dndr = DR_SF7CR;                                           \
-    LMIC.rps = dndr2rps(LMIC.dndr);                                     \
+static void setRx1Params(void) {
+    s1_t offset;         
+    if((LMIC.opmode & OP_JOINING) != 0) {
+      //joining
+      offset = 0;
+    } else {
+      offset = RX1DROFFSET;
+    }
+
+    //in AU/US 915 the downlink channel is ALWAYS a 500kHz BW channel of which there are only 8. rx 500khx channel number = tx channel number modolo 8
+    LMIC.freq = US915_500kHz_DNFBASE + (LMIC.txChnl & 0x7) * US915_500kHz_DNFSTEP;
+
+    if(/*tx datarate*/ LMIC.dndr < DR_SF8C) {
+      LMIC.dndr += DR_SF10CR - DR_SF10 - offset; //+10-offset 
+      if(LMIC.dndr < DR_SF12CR) LMIC.dndr = DR_SF12CR;
+      if(LMIC.dndr > DR_SF7CR) LMIC.dndr = DR_SF7CR;                           
+    }
+
+    LMIC.rps = dndr2rps(LMIC.dndr); 
 }
 
 #if !defined(DISABLE_JOIN)
 static void initJoinLoop (void) {
-    LMIC.chRnd = 0;
-    LMIC.txChnl = 0;
+    LMIC.chRnd = 0;  
     LMIC.adrTxPow = 20;
     ASSERT((LMIC.opmode & OP_NEXTCHNL)==0);
     LMIC.txend = os_getTime();
-    setDrJoin(DRCHG_SET, DR_SF7);
+    setDrJoin(DRCHG_SET, DR_SF10);
+    _nextTx();  //Use sub-band aware channel selection
 }
 
 static ostime_t nextJoinState (void) {
@@ -901,18 +913,12 @@ static ostime_t nextJoinState (void) {
     //   SF8C        on a random channel 64..71
     //
     u1_t failed = 0;
-    if( LMIC.datarate != DR_SF8C ) {
-        LMIC.txChnl = 64+(LMIC.txChnl&7);
-        setDrJoin(DRCHG_SET, DR_SF8C);
+    if( LMIC.datarate != DR_SF8C ) { //alternate between 500khz DR and 125khz DR        
+        setDrJoin(DRCHG_SET, DR_SF8C);        
     } else {
-        LMIC.txChnl = os_getRndU1() & 0x3F;
-        s1_t dr = DR_SF7 - ++LMIC.txCnt;
-        if( dr < DR_SF10 ) {
-            dr = DR_SF10;
-            failed = 1; // All DR exhausted - signal failed
-        }
-        setDrJoin(DRCHG_SET, dr);
+        setDrJoin(DRCHG_SET, DR_SF10); //LoraWAN Spec says the 125Khz Join should always be on DR0
     }
+    _nextTx(); //use channel select method that is aware of channel enable/disable via subband.
     LMIC.opmode &= ~OP_NEXTCHNL;
     LMIC.txend = os_getTime() +
         (isTESTMODE()
@@ -1047,7 +1053,7 @@ static bit_t decodeFrame (void) {
                             e_.info   = dlen < 4 ? 0 : os_rlsbf4(&d[dlen-4]),
                             e_.info2  = hdr + (dlen<<8)));
       norx:
-#if LMIC_DEBUG_LEVEL > 0
+#if LMIC_DEBUG_LEVEL > 0        
         lmic_printf("%lu: Invalid downlink, window=%s\n", os_getTime(), window);
 #endif
         LMIC.dataLen = 0;
