@@ -208,6 +208,7 @@ void hal_sleep () {
 // -----------------------------------------------------------------------------
 
 #if defined(LMIC_PRINTF_TO)
+#if defined(__AVR)
 static int uart_putchar (char c, FILE *)
 {
     LMIC_PRINTF_TO.write(c) ;
@@ -225,6 +226,28 @@ void hal_printf_init() {
     // The uart is the standard output device STDOUT.
     stdout = &uartout ;
 }
+#else // !__AVR
+
+
+static ssize_t uart_putchar (void *, const char *buf, size_t len)
+{
+    return LMIC_PRINTF_TO.write(buf, len);
+}
+
+static cookie_io_functions_t functions =
+{
+    .read = NULL,
+    .write = uart_putchar,
+    .seek = NULL,
+    .close = NULL
+};
+
+void hal_printf_init()
+{
+    if(stdout = fopencookie(NULL, "w", functions))
+		setvbuf(stdout, NULL, _IONBF, 0);
+}
+#endif
 #endif // defined(LMIC_PRINTF_TO)
 
 void hal_init () {
@@ -242,11 +265,16 @@ void hal_init () {
 
 void hal_failed (const char *file, u2_t line) {
 #if defined(LMIC_FAILURE_TO)
+#if defined(LMIC_PRINTF_TO)
+	printf("FAILURE %s:%u\n", file, (int)line);
+	LMIC_PRINTF_TO.flush();
+#else
     LMIC_FAILURE_TO.println("FAILURE ");
     LMIC_FAILURE_TO.print(file);
     LMIC_FAILURE_TO.print(':');
     LMIC_FAILURE_TO.println(line);
     LMIC_FAILURE_TO.flush();
+#endif	
 #endif
     hal_disableIRQs();
     while(1);

@@ -51,7 +51,9 @@ DEFINE_LMIC;
 
 void __lmic_set_rps(int x, const char* file, int line)
 {
+#if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("set_rps from %i to %i (%s:%i)\n", LMIC.rps, x, file, line);
+#endif
 	LMIC.rps = x;
 }
 
@@ -711,9 +713,11 @@ static ostime_t nextTx (ostime_t now) {
                 mintime = LMIC.bands[band = bi].avail;
             }
         }
-		
+
+#if LMIC_DEBUG_LEVEL > 0		
 		lmic_printf("find next channel, band=%i\n", band);
 		lmic_printf("channel map: 0x%04x\n", LMIC.channelMap);
+#endif		
         // Find next channel in given band
         u1_t chnl = LMIC.bands[band].lastchnl;
 		
@@ -950,8 +954,9 @@ static void setBcnRxParams (void) {
 #endif // !DISABLE_BEACONS
 
 static void setRx1Params(void) {
-	
+#if LMIC_DEBUG_LEVEL > 0	
 	lmic_printf("setRx1Params");
+#endif	
 	
     s1_t offset;         
     if((LMIC.opmode & OP_JOINING) != 0) {
@@ -1534,6 +1539,7 @@ static bit_t processJoinAccept (void) {
     ASSERT(LMIC.txrxFlags != TXRX_DNW1 || LMIC.dataLen != 0);
     ASSERT((LMIC.opmode & OP_TXRXPEND)!=0);
 
+#if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("processJoinAccept\n");
 	lmic_printf("len: %i\n", LMIC.dataLen);
 	
@@ -1542,6 +1548,7 @@ static bit_t processJoinAccept (void) {
 		lmic_printf("%02x", LMIC.frame[i]);
 	}
 	lmic_printf("\n");
+#endif
 	
     if( LMIC.dataLen == 0 ) {
       nojoinframe:
@@ -1591,11 +1598,14 @@ static bit_t processJoinAccept (void) {
         goto badframe;
     }
 
+#if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("dlen: %i\n", dlen);
+
 	for(int i=0; i<dlen-4; ++i)
 	{
 		lmic_printf("%02x", LMIC.frame[i]);
 	}
+
 	lmic_printf("\n");
 	
 	lmic_printf("hdr: %02x\n", LMIC.frame[0]);
@@ -1604,7 +1614,7 @@ static bit_t processJoinAccept (void) {
 	lmic_printf("DevAddr: %02x%02x%02x%02x\n", LMIC.frame[7], LMIC.frame[8], LMIC.frame[9], LMIC.frame[10]);
 	lmic_printf("DLSettings: %02x\n", LMIC.frame[11]);
 	lmic_printf("RxDelay: %02x\n", LMIC.frame[12]);
-	
+#endif	
 	
 	
     u4_t addr = os_rlsbf4(LMIC.frame+OFF_JA_DEVADDR);
@@ -1621,11 +1631,15 @@ static bit_t processJoinAccept (void) {
         dlen = OFF_CFLIST;
         
 		for( u1_t chidx=3; chidx<8; chidx++, dlen+=3 ) {
-			
+
+#if LMIC_DEBUG_LEVEL > 0
 			lmic_printf("data: %02x%02x\n", LMIC.frame[dlen], LMIC.frame[dlen+1]);
+#endif
 			
             u4_t freq = convFreq(&LMIC.frame[dlen]);
+#if LMIC_DEBUG_LEVEL > 0
 			lmic_printf("freq: %i\n", freq);
+#endif
 			
             if( freq ) {
                 LMIC_setupChannel(chidx, (unsigned long)freq, 0, -1);
@@ -1663,7 +1677,9 @@ static bit_t processJoinAccept (void) {
     stateJustJoined();
     
 	LMIC.dn2Dr = LMIC.frame[OFF_JA_DLSET] & 0x0F;
+#if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("dn2Dr = %i", LMIC.dn2Dr);
+#endif
 
 	
     LMIC.rxDelay = LMIC.frame[OFF_JA_RXDLY];
@@ -2025,9 +2041,11 @@ static bit_t processDnData (void) {
     if( LMIC.dataLen == 0 ) {
       norx:
 	  
+#if LMIC_DEBUG_LEVEL > 0
 		lmic_printf("txCnt: %i\n", LMIC.txCnt);
 		lmic_printf("flags: %02x\n", LMIC.txrxFlags);
 		lmic_printf("ack: %i\n", LMIC.txrxFlags & TXRX_ACK);
+#endif
 	  
         if( LMIC.txCnt != 0 ) {
             if( LMIC.txCnt < TXCONF_ATTEMPTS ) {
