@@ -6,8 +6,21 @@
 // compiler commandline, use this file instead.
 
 //#define CFG_eu868 1
-#define CFG_us915 1
-#define CFG_au915 1
+#define CFG_as923 1
+//#define CFG_us915 1
+//#define CFG_au915 1
+
+
+// AS923 implementation uses pre-existing EU868 code
+#if defined(CFG_as923) && !defined(CFG_eu868)
+#define CFG_eu868 1
+#endif
+
+// AU915 implementation uses pre-existing US915 code
+#if defined(CFG_au915) && !defined(CFG_us915)
+#defined CFG_us915 1
+#endif
+
 
 #define RX1DROFFSET 3
 

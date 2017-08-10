@@ -115,7 +115,7 @@ void os_runloop_once() {
     hal_enableIRQs();
     if(j) { // run job callback
         #if LMIC_DEBUG_LEVEL > 1
-            lmic_printf("%lu: Running job %p, cb %p, deadline %lu\n", os_getTime(), j, j->func, is_runnable ? 0 : j->deadline);
+            lmic_printf("%lu: Running job %p, cb %p, deadline %lu\n", os_getTime(), j, j->func, j->deadline);
         #endif
         j->func(j);
     }

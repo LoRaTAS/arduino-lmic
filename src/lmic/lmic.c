@@ -47,6 +47,15 @@
 DEFINE_LMIC;
 
 
+
+
+void __lmic_set_rps(int x, const char* file, int line)
+{
+	lmic_printf("set_rps from %i to %i (%s:%i)\n", LMIC.rps, x, file, line);
+	LMIC.rps = x;
+}
+
+
 // Fwd decls.
 static void engineUpdate(void);
 static void startScan (void);
@@ -216,6 +225,9 @@ static void aes_sessKeys (u2_t devnonce, xref2cu1_t artnonce, xref2u1_t nwkkey, 
 #define maxFrameLen(dr) ((dr)<=DR_SF9 ? TABLE_GET_U1(maxFrameLens, (dr)) : 0xFF)
 CONST_TABLE(u1_t, maxFrameLens) [] = { 64,64,64,123 };
 
+
+#if defined(CFG_as923)
+
 CONST_TABLE(u1_t, _DR2RPS_CRC)[] = {
     ILLEGAL_RPS,
     (u1_t)MAKERPS(SF12, BW125, CR_4_5, 0, 0),
@@ -228,6 +240,20 @@ CONST_TABLE(u1_t, _DR2RPS_CRC)[] = {
     (u1_t)MAKERPS(FSK,  BW125, CR_4_5, 0, 0),
     ILLEGAL_RPS
 };
+#else
+CONST_TABLE(u1_t, _DR2RPS_CRC)[] = {
+    ILLEGAL_RPS,
+    (u1_t)MAKERPS(SF12, BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF11, BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF10, BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF9,  BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF8,  BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF7,  BW125, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(SF7,  BW250, CR_4_5, 0, 0),
+    (u1_t)MAKERPS(FSK,  BW125, CR_4_5, 0, 0),
+    ILLEGAL_RPS
+};
+#endif
 
 static CONST_TABLE(s1_t, TXPOWLEVELS)[] = {
     20, 14, 11, 8, 5, 2, 0,0, 0,0,0,0, 0,0,0,0
@@ -579,27 +605,47 @@ bit_t LMIC_setupBand (u1_t bandidx, s1_t txpow, u2_t txcap) {
 }
 
 bit_t LMIC_setupChannel (u1_t chidx, u4_t freq, u2_t drmap, s1_t band) {
+	
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("setupChannel ch=%i freq=%i dr=%i band=%i\n", chidx, freq, drmap, band);
+#endif
+	
     if( chidx >= MAX_CHANNELS )
         return 0;
     if( band == -1 ) {
-        if( freq >= 869400000 && freq <= 869650000 )
-            freq |= BAND_DECI;   // 10% 27dBm
+        if( freq >= EU868_FREQ_MIN && freq <= EU868_FREQ_MAX )
+/*            freq |= BAND_DECI;   // 10% 27dBm
         else if( (freq >= 868000000 && freq <= 868600000) ||
                  (freq >= 869700000 && freq <= 870000000)  )
             freq |= BAND_CENTI;  // 1% 14dBm
         else
-            freq |= BAND_MILLI;  // 0.1% 14dBm
+			*/
+            freq |= BAND_CENTI;  // 1% 14dBm
     } else {
         if( band > BAND_AUX ) return 0;
         freq = (freq&~3) | band;
     }
+	
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("idx: %i freq: %i\n", chidx, freq);
+#endif
+
     LMIC.channelFreq [chidx] = freq;
     LMIC.channelDrMap[chidx] = drmap==0 ? DR_RANGE_MAP(DR_SF12,DR_SF7) : drmap;
     LMIC.channelMap |= 1<<chidx;  // enabled right away
+	
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("Channel map: 0x%4x\n", LMIC.channelMap);
+#endif
     return 1;
 }
 
 void LMIC_disableChannel (u1_t channel) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("********\n");
+	lmic_printf("Disable Channel: %i\n", channel);
+	lmic_printf("********\n");
+#endif
     LMIC.channelFreq[channel] = 0;
     LMIC.channelDrMap[channel] = 0;
     LMIC.channelMap &= ~(1<<channel);
@@ -626,6 +672,10 @@ static u1_t mapChannels (u1_t chpage, u2_t chmap) {
 
 
 static void updateTx (ostime_t txbeg) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("updateTx\n");
+#endif
+
     u4_t freq = LMIC.channelFreq[LMIC.txChnl];
     // Update global/band specific duty cycle stats
     ostime_t airtime = calcAirTime(LMIC.rps, LMIC.dataLen);
@@ -644,6 +694,11 @@ static void updateTx (ostime_t txbeg) {
 }
 
 static ostime_t nextTx (ostime_t now) {
+
+	
+	
+	
+	
     u1_t bmap=0xF;
     do {
         ostime_t mintime = now + /*8h*/sec2osticks(28800);
@@ -656,18 +711,35 @@ static ostime_t nextTx (ostime_t now) {
                 mintime = LMIC.bands[band = bi].avail;
             }
         }
+		
+		lmic_printf("find next channel, band=%i\n", band);
+		lmic_printf("channel map: 0x%04x\n", LMIC.channelMap);
         // Find next channel in given band
         u1_t chnl = LMIC.bands[band].lastchnl;
+		
         for( u1_t ci=0; ci<MAX_CHANNELS; ci++ ) {
+			
             if( (chnl = (chnl+1)) >= MAX_CHANNELS )
                 chnl -=  MAX_CHANNELS;
+
+			//lmic_printf("test channel: %i\n", chnl);
+			//lmic_printf("channelDr: %i\n", (LMIC.channelDrMap[chnl] & (1<<(LMIC.datarate&0xF))));
+			//lmic_printf("band: %i\n", LMIC.channelFreq[chnl] & 0x3);
+			
+			
+			
             if( (LMIC.channelMap & (1<<chnl)) != 0  &&  // channel enabled
                 (LMIC.channelDrMap[chnl] & (1<<(LMIC.datarate&0xF))) != 0  &&
                 band == (LMIC.channelFreq[chnl] & 0x3) ) { // in selected band
                 LMIC.txChnl = LMIC.bands[band].lastchnl = chnl;
+#if LMIC_DEBUG_LEVEL > 0
+				//lmic_printf("*********************");
+				//lmic_printf("channel: %i\n", LMIC.txChnl);
+#endif
                 return mintime;
             }
         }
+		
         #if LMIC_DEBUG_LEVEL > 1
             lmic_printf("%lu: No channel found in band %d\n", os_getTime(), band);
         #endif
@@ -676,6 +748,7 @@ static ostime_t nextTx (ostime_t now) {
             return mintime;
         }
     } while(1);
+
 }
 
 
@@ -877,6 +950,9 @@ static void setBcnRxParams (void) {
 #endif // !DISABLE_BEACONS
 
 static void setRx1Params(void) {
+	
+	lmic_printf("setRx1Params");
+	
     s1_t offset;         
     if((LMIC.opmode & OP_JOINING) != 0) {
       //joining
@@ -894,7 +970,10 @@ static void setRx1Params(void) {
       if(LMIC.dndr > DR_SF7CR) LMIC.dndr = DR_SF7CR;                           
     }
 
-    LMIC.rps = dndr2rps(LMIC.dndr); 
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("dndr: %i\n", LMIC.dndr);
+#endif
+	LMIC_SET_RPS(dndr2rps(LMIC.dndr));
 }
 
 #if !defined(DISABLE_JOIN)
@@ -1348,8 +1427,16 @@ static bit_t decodeFrame (void) {
 
 
 static void setupRx2 (void) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("setupRx2\n");
+	lmic_printf("DR: %i\n", LMIC.dn2Dr);
+	lmic_printf("rps: %i\n", dndr2rps(LMIC.dn2Dr));
+#endif	
     LMIC.txrxFlags = TXRX_DNW2;
-    LMIC.rps = dndr2rps(LMIC.dn2Dr);
+    //LMIC.rps = dndr2rps(LMIC.dn2Dr);
+	
+	
+	LMIC_SET_RPS(dndr2rps(LMIC.dn2Dr));
     LMIC.freq = LMIC.dn2Freq;
     LMIC.dataLen = 0;
     os_radio(RADIO_RX);
@@ -1390,9 +1477,15 @@ static void schedRx12 (ostime_t delay, osjobcb_t func, u1_t dr) {
 }
 
 static void setupRx1 (osjobcb_t func) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("setupRx1\n");
+#endif
+	
     LMIC.txrxFlags = TXRX_DNW1;
     // Turn LMIC.rps from TX over to RX
-    LMIC.rps = setNocrc(LMIC.rps,1);
+    //LMIC.rps = setNocrc(LMIC.rps,1);
+	LMIC_SET_RPS(setNocrc(LMIC.rps,1));
+	
     LMIC.dataLen = 0;
     LMIC.osjob.func = func;
     os_radio(RADIO_RX);
@@ -1437,11 +1530,19 @@ static void onJoinFailed (xref2osjob_t osjob) {
     reportEvent(EV_JOIN_FAILED);
 }
 
-
 static bit_t processJoinAccept (void) {
     ASSERT(LMIC.txrxFlags != TXRX_DNW1 || LMIC.dataLen != 0);
     ASSERT((LMIC.opmode & OP_TXRXPEND)!=0);
 
+	lmic_printf("processJoinAccept\n");
+	lmic_printf("len: %i\n", LMIC.dataLen);
+	
+	for(int i=0; i<LMIC.dataLen; ++i)
+	{
+		lmic_printf("%02x", LMIC.frame[i]);
+	}
+	lmic_printf("\n");
+	
     if( LMIC.dataLen == 0 ) {
       nojoinframe:
         if( (LMIC.opmode & OP_JOINING) == 0 ) {
@@ -1468,6 +1569,7 @@ static bit_t processJoinAccept (void) {
                             : FUNC_ADDR(runEngineUpdate)); // next step to be delayed
         return 1;
     }
+	
     u1_t hdr  = LMIC.frame[0];
     u1_t dlen = LMIC.dataLen;
     u4_t mic  = os_rlsbf4(&LMIC.frame[dlen-4]); // safe before modified by encrypt!
@@ -1489,6 +1591,22 @@ static bit_t processJoinAccept (void) {
         goto badframe;
     }
 
+	lmic_printf("dlen: %i\n", dlen);
+	for(int i=0; i<dlen-4; ++i)
+	{
+		lmic_printf("%02x", LMIC.frame[i]);
+	}
+	lmic_printf("\n");
+	
+	lmic_printf("hdr: %02x\n", LMIC.frame[0]);
+	lmic_printf("AppNonce: %02x%02x%02x\n", LMIC.frame[1], LMIC.frame[2], LMIC.frame[3]);
+	lmic_printf("NetID: %02x%02x%02x\n", LMIC.frame[4], LMIC.frame[5], LMIC.frame[6]);
+	lmic_printf("DevAddr: %02x%02x%02x%02x\n", LMIC.frame[7], LMIC.frame[8], LMIC.frame[9], LMIC.frame[10]);
+	lmic_printf("DLSettings: %02x\n", LMIC.frame[11]);
+	lmic_printf("RxDelay: %02x\n", LMIC.frame[12]);
+	
+	
+	
     u4_t addr = os_rlsbf4(LMIC.frame+OFF_JA_DEVADDR);
     LMIC.devaddr = addr;
     LMIC.netid = os_rlsbf4(&LMIC.frame[OFF_JA_NETID]) & 0xFFFFFF;
@@ -1501,11 +1619,17 @@ static bit_t processJoinAccept (void) {
         goto badframe;
 #endif
         dlen = OFF_CFLIST;
-        for( u1_t chidx=3; chidx<8; chidx++, dlen+=3 ) {
+        
+		for( u1_t chidx=3; chidx<8; chidx++, dlen+=3 ) {
+			
+			lmic_printf("data: %02x%02x\n", LMIC.frame[dlen], LMIC.frame[dlen+1]);
+			
             u4_t freq = convFreq(&LMIC.frame[dlen]);
+			lmic_printf("freq: %i\n", freq);
+			
             if( freq ) {
-                LMIC_setupChannel(chidx, freq, 0, -1);
-#if LMIC_DEBUG_LEVEL > 1
+                LMIC_setupChannel(chidx, (unsigned long)freq, 0, -1);
+#if LMIC_DEBUG_LEVEL > 0
                 lmic_printf("%lu: Setup channel, idx=%d, freq=%lu\n", os_getTime(), chidx, (unsigned long)freq);
 #endif
             }
@@ -1537,7 +1661,11 @@ static bit_t processJoinAccept (void) {
     LMIC.opmode &= ~(OP_JOINING|OP_TRACK|OP_REJOIN|OP_TXRXPEND|OP_PINGINI) | OP_NEXTCHNL;
     LMIC.txCnt = 0;
     stateJustJoined();
-    LMIC.dn2Dr = LMIC.frame[OFF_JA_DLSET] & 0x0F;
+    
+	LMIC.dn2Dr = LMIC.frame[OFF_JA_DLSET] & 0x0F;
+	lmic_printf("dn2Dr = %i", LMIC.dn2Dr);
+
+	
     LMIC.rxDelay = LMIC.frame[OFF_JA_RXDLY];
     if (LMIC.rxDelay == 0) LMIC.rxDelay = 1;
     reportEvent(EV_JOINED);
@@ -1896,8 +2024,24 @@ static bit_t processDnData (void) {
 
     if( LMIC.dataLen == 0 ) {
       norx:
+	  
+		lmic_printf("txCnt: %i\n", LMIC.txCnt);
+		lmic_printf("flags: %02x\n", LMIC.txrxFlags);
+		lmic_printf("ack: %i\n", LMIC.txrxFlags & TXRX_ACK);
+	  
         if( LMIC.txCnt != 0 ) {
             if( LMIC.txCnt < TXCONF_ATTEMPTS ) {
+				
+				
+				
+				
+				
+				#if LMIC_DEBUG_LEVEL > 0
+				lmic_printf("*********************************************\n");
+				lmic_printf("NO DATA RECEIVED\n");
+				lmic_printf("*********************************************\n");
+				#endif
+				
                 LMIC.txCnt += 1;
                 setDrTxpow(DRCHG_NOACK, lowerDR(LMIC.datarate, TABLE_GET_U1(DRADJUST, LMIC.txCnt)), KEEP_TXPOW);
                 // Schedule another retransmission
@@ -2065,6 +2209,10 @@ static void engineUpdate (void) {
 #endif // !DISABLE_BEACONS
 
     if( (LMIC.opmode & (OP_JOINING|OP_REJOIN|OP_TXDATA|OP_POLL)) != 0 ) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("joining, rejoining, txdata or poll\n");
+#endif
+
         // Need to TX some data...
         // Assuming txChnl points to channel which first becomes available again.
         bit_t jacc = ((LMIC.opmode & (OP_JOINING|OP_REJOIN)) != 0 ? 1 : 0);
@@ -2157,7 +2305,8 @@ static void engineUpdate (void) {
                 buildDataFrame();
                 LMIC.osjob.func = FUNC_ADDR(updataDone);
             }
-            LMIC.rps    = setCr(updr2rps(txdr), (cr_t)LMIC.errcr);
+			LMIC_SET_RPS(setCr(updr2rps(txdr), (cr_t)LMIC.errcr));
+            //LMIC.rps    = setCr(updr2rps(txdr), (cr_t)LMIC.errcr);
             LMIC.dndr   = txdr;  // carry TX datarate (can be != LMIC.datarate) over to txDone/setupRx1
             LMIC.opmode = (LMIC.opmode & ~(OP_POLL|OP_RNDTX)) | OP_TXRXPEND | OP_NEXTCHNL;
             updateTx(txbeg);

@@ -106,6 +106,13 @@ struct bcninfo_t {
 };
 #endif // !DISABLE_BEACONS
 
+
+
+// trace to see where RPS is being set
+void __lmic_set_rps(int x, const char* file, int line);
+#define LMIC_SET_RPS(x) __lmic_set_rps(x, __FILE__, __LINE__)
+
+
 // purpose of receive window - lmic_t.rxState
 enum { RADIO_RST=0, RADIO_TX=1, RADIO_RX=2, RADIO_RXON=3 };
 // Netid values /  lmic_t.netid

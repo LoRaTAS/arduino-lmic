@@ -70,6 +70,39 @@ enum { DR_PAGE = DR_PAGE_EU868 };
 //  g2 : 0.1%  14dBm
 //  g3 :  10%  27dBm
 //                 freq             band     datarates
+
+
+#if defined(CFG_as923)
+enum { EU868_F1 = 923200000,
+	   EU868_F2 = 923400000,
+	   EU868_F3 = 923200000,
+	   EU868_F4 = 923400000,	   
+	   EU868_F5 = 923200000,
+	   EU868_F6 = 923400000,	  
+	   EU868_J1 = 923200000,
+	   EU868_J2 = 923400000,
+};
+
+enum { EU868_FREQ_MIN = 920000000,
+	   EU868_FREQ_MAX = 928000000,
+};
+
+enum { CHNL_PING = 5 };
+enum { FREQ_PING = EU868_F6 };
+enum { DR_PING = DR_SF9 };
+
+enum { CHNL_DNW2 = 4 };
+enum { FREQ_DNW2 = EU868_F5 };
+enum { DR_DNW2           = DR_SF10 };
+
+enum { CHNL_BCN          = 5 };
+enum { FREQ_BCN          = EU868_F6 };
+enum { DR_BCN            = DR_SF9 };
+enum { AIRTIME_BCN       = 144384 };  // micros
+
+#else
+
+
 enum { EU868_F1 = 868100000,      // g1   SF7-12
        EU868_F2 = 868300000,      // g1   SF7-12 FSK SF7/250
        EU868_F3 = 868500000,      // g1   SF7-12
@@ -93,6 +126,10 @@ enum { CHNL_BCN          = 5 };
 enum { FREQ_BCN          = EU868_F6 };
 enum { DR_BCN            = DR_SF9 };
 enum { AIRTIME_BCN       = 144384 };  // micros
+
+
+
+#endif
 
 enum {
     // Beacon frame format EU SF9

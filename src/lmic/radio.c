@@ -315,11 +315,16 @@ static void opmodeFSK() {
 
 // configure LoRa modem (cfg1, cfg2)
 static void configLoraModem () {
+	
     sf_t sf = getSf(LMIC.rps);
 
 #ifdef CFG_sx1276_radio
         u1_t mc1 = 0, mc2 = 0, mc3 = 0;
 
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("configLoraModem - rps = %i - bw = %i\n", LMIC.rps, getBw(LMIC.rps));
+#endif
+		
         switch (getBw(LMIC.rps)) {
         case BW125: mc1 |= SX1276_MC1_BW_125; break;
         case BW250: mc1 |= SX1276_MC1_BW_250; break;
@@ -466,12 +471,31 @@ static void txfsk () {
     opmode(OPMODE_TX);
 }
 
+
+#if defined LMIC_DEBUG_LEVEL > 0
+static inline void print_data(unsigned char* data, size_t len)
+{
+	for(int i=0; i<len; ++i)
+	{
+		lmic_printf("%02x", data[i]);
+	}
+	lmic_printf("\n");
+}
+#endif
+
 static void txlora () {
+#if defined LMIC_DEBUG_LEVEL > 0
+	lmic_printf("txlora\n");
+	print_data(LMIC.frame, LMIC.dataLen);
+#endif
+	
     // select LoRa modem (from sleep mode)
     //writeReg(RegOpMode, OPMODE_LORA);
     opmodeLora();
     ASSERT((readReg(RegOpMode) & OPMODE_LORA) != 0);
 
+	
+	
     // enter standby mode (required for FIFO loading))
     opmode(OPMODE_STANDBY);
     // configure LoRa modem (cfg1, cfg2)
@@ -540,6 +564,10 @@ static CONST_TABLE(u1_t, rxlorairqmask)[] = {
 
 // start LoRa receiver (time=LMIC.rxtime, timeout=LMIC.rxsyms, result=LMIC.frame[LMIC.dataLen])
 static void rxlora (u1_t rxmode) {
+#if defined LMIC_DEBUG_LEVEL > 0
+	lmic_printf("rxlora: %i\n", rxmode);
+#endif
+	
     // select LoRa modem (from sleep mode)
     opmodeLora();
     ASSERT((readReg(RegOpMode) & OPMODE_LORA) != 0);
@@ -657,6 +685,10 @@ static void rxfsk (u1_t rxmode) {
 }
 
 static void startrx (u1_t rxmode) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("startrx: %i\n", rxmode);
+#endif
+	
     ASSERT( (readReg(RegOpMode) & OPMODE_MASK) == OPMODE_SLEEP );
     if(getSf(LMIC.rps) == FSK) { // FSK modem
         rxfsk(rxmode);
@@ -784,6 +816,13 @@ void radio_irq_handler (u1_t dio) {
             writeReg(LORARegFifoAddrPtr, readReg(LORARegFifoRxCurrentAddr));
             // now read the FIFO
             readBuf(RegFifo, LMIC.frame, LMIC.dataLen);
+			
+			
+#if LMIC_DEBUG_LEVEL > 0
+			lmic_printf("rxlora received: dataLen=%i\n", LMIC.dataLen);
+			print_data(LMIC.frame, LMIC.dataLen);
+#endif
+			
             // read rx quality parameters
             LMIC.snr  = readReg(LORARegPktSnrValue); // SNR [dB] * 4
             LMIC.rssi = readReg(LORARegPktRssiValue) - 125 + 64; // RSSI [dBm] (-196...+63)
@@ -825,6 +864,10 @@ void radio_irq_handler (u1_t dio) {
 }
 
 void os_radio (u1_t mode) {
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("os_radio: %i\n", mode);
+#endif
+	
     hal_disableIRQs();
     switch (mode) {
       case RADIO_RST:
