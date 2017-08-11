@@ -230,6 +230,7 @@ struct lmic_t {
 #if !defined(DISABLE_MCMD_SNCH_REQ)
     u1_t        snchAns;      // answer set new channel
 #endif
+	u1_t        rx1DrOffset;
     // 2nd RX window (after up stream)
     u1_t        dn2Dr;
     u4_t        dn2Freq;

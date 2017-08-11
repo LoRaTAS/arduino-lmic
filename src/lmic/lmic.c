@@ -1481,14 +1481,50 @@ static void schedRx12 (ostime_t delay, osjobcb_t func, u1_t dr) {
     os_setTimedCallback(&LMIC.osjob, LMIC.rxtime - RX_RAMPUP, func);
 }
 
+static int rx1DrOffsetTable[] =
+{
+	0, 1, 2, 3, 4, 5, -1, -2
+};
+
+
 static void setupRx1 (osjobcb_t func) {
 #if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("setupRx1\n");
 #endif
 	
+	
+	
+	
     LMIC.txrxFlags = TXRX_DNW1;
     // Turn LMIC.rps from TX over to RX
     //LMIC.rps = setNocrc(LMIC.rps,1);
+	
+	
+	
+	
+#if defined(CFG_as923)
+	lmic_printf("rx1droffset: %i\n", LMIC.rx1DrOffset);
+
+	ASSERT(LMIC.rx1DrOffset >= 0);
+	ASSERT(LMIC.rx1DrOffset < 8);
+	
+	dr_t txdr = (dr_t)LMIC.datarate;
+	dr_t rx1dr = txdr - rx1DrOffsetTable[LMIC.rx1DrOffset];
+	lmic_printf("rx1dr: %i\n", rx1dr);
+	
+	if(rx1dr > 5)
+		rx1dr = 5;
+	if(rx1dr < 0)
+		rx1dr = 0;
+	lmic_printf("limited [0:5] rx1dr: %i\n", rx1dr);
+	
+	
+	LMIC_SET_RPS(setCr(updr2rps(rx1dr), (cr_t)LMIC.errcr));
+#endif	
+	
+	
+	
+	
 	LMIC_SET_RPS(setNocrc(LMIC.rps,1));
 	
     LMIC.dataLen = 0;
@@ -1680,6 +1716,20 @@ static bit_t processJoinAccept (void) {
 #if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("dn2Dr = %i", LMIC.dn2Dr);
 #endif
+
+
+	lmic_printf("DLSettings: %02x\n", LMIC.frame[11]);
+	lmic_printf("bits: %02x\n", LMIC.frame[OFF_JA_DLSET] & 0x70);
+	lmic_printf("bits: %02x\n", (LMIC.frame[OFF_JA_DLSET] & 0x70) >> 4);
+
+	// set RX1DROFFSET according to join process documentation
+	u1_t rx1DrOffset = (LMIC.frame[OFF_JA_DLSET] & 0x70) >> 4;
+	if(rx1DrOffset >= 0 && rx1DrOffset < 8)
+		LMIC.rx1DrOffset = rx1DrOffset;
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("RX1DROffset: %i\n", rx1DrOffset);
+#endif
+
 
 	
     LMIC.rxDelay = LMIC.frame[OFF_JA_RXDLY];
@@ -2285,6 +2335,10 @@ static void engineUpdate (void) {
             // We could send right now!
         txbeg = now;
             dr_t txdr = (dr_t)LMIC.datarate;
+#if LMIC_DEBUG_LEVEL > 0
+			lmic_printf("txdr: %i\n", txdr);
+#endif
+			
 #if !defined(DISABLE_JOIN)
             if( jacc ) {
                 u1_t ftype;
