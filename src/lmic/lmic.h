@@ -28,7 +28,7 @@ extern "C"{
 #define LMIC_VERSION_BUILD 1431528305
 
 enum { MAX_FRAME_LEN      =  64 };   //!< Library cap on max frame length
-enum { TXCONF_ATTEMPTS    =   8 };   //!< Transmit attempts for confirmed frames
+enum { TXCONF_ATTEMPTS    =   0 };   //!< Transmit attempts for confirmed frames
 enum { MAX_MISSED_BCNS    =  20 };   // threshold for triggering rejoin requests
 enum { MAX_RXSYMS         = 100 };   // stop tracking beacon beyond this
 
@@ -108,9 +108,17 @@ struct bcninfo_t {
 
 
 
+//#define PRINT_RPS_CHANGE
+
+
+#if defined(PRINT_RPS_CHANGE)
 // trace to see where RPS is being set
 void __lmic_set_rps(int x, const char* file, int line);
 #define LMIC_SET_RPS(x) __lmic_set_rps(x, __FILE__, __LINE__)
+#else
+#define LMIC_SET_RPS(x) LMIC.rps = x
+#endif
+
 
 
 // purpose of receive window - lmic_t.rxState

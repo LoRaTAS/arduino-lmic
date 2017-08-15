@@ -49,6 +49,7 @@ DEFINE_LMIC;
 
 
 
+#if defined(PRINT_RPS_CHANGE)
 void __lmic_set_rps(int x, const char* file, int line)
 {
 #if LMIC_DEBUG_LEVEL > 0
@@ -56,6 +57,7 @@ void __lmic_set_rps(int x, const char* file, int line)
 #endif
 	LMIC.rps = x;
 }
+#endif
 
 
 // Fwd decls.
@@ -607,9 +609,8 @@ bit_t LMIC_setupBand (u1_t bandidx, s1_t txpow, u2_t txcap) {
 }
 
 bit_t LMIC_setupChannel (u1_t chidx, u4_t freq, u2_t drmap, s1_t band) {
-	
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("setupChannel ch=%i freq=%i dr=%i band=%i\n", chidx, freq, drmap, band);
+#if defined(LMIC_PRINT_LORA)
+	lmic_printf("setupChannel %i %iHz DR%i Band%i\n", (int)chidx, (int)freq, (int)drmap, (int)band);
 #endif
 	
     if( chidx >= MAX_CHANNELS )
@@ -628,25 +629,16 @@ bit_t LMIC_setupChannel (u1_t chidx, u4_t freq, u2_t drmap, s1_t band) {
         freq = (freq&~3) | band;
     }
 	
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("idx: %i freq: %i\n", chidx, freq);
-#endif
-
     LMIC.channelFreq [chidx] = freq;
     LMIC.channelDrMap[chidx] = drmap==0 ? DR_RANGE_MAP(DR_SF12,DR_SF7) : drmap;
     LMIC.channelMap |= 1<<chidx;  // enabled right away
 	
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("Channel map: 0x%4x\n", LMIC.channelMap);
-#endif
     return 1;
 }
 
 void LMIC_disableChannel (u1_t channel) {
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("********\n");
-	lmic_printf("Disable Channel: %i\n", channel);
-	lmic_printf("********\n");
+#if defined(LMIC_PRINT_LORA)
+	lmic_printf("disableChannel %i %iHz\n", (int)channel, (int)LMIC.channelFreq[channel]);
 #endif
     LMIC.channelFreq[channel] = 0;
     LMIC.channelDrMap[channel] = 0;
@@ -674,10 +666,6 @@ static u1_t mapChannels (u1_t chpage, u2_t chmap) {
 
 
 static void updateTx (ostime_t txbeg) {
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("updateTx\n");
-#endif
-
     u4_t freq = LMIC.channelFreq[LMIC.txChnl];
     // Update global/band specific duty cycle stats
     ostime_t airtime = calcAirTime(LMIC.rps, LMIC.dataLen);
@@ -714,10 +702,6 @@ static ostime_t nextTx (ostime_t now) {
             }
         }
 
-#if LMIC_DEBUG_LEVEL > 0		
-		lmic_printf("find next channel, band=%i\n", band);
-		lmic_printf("channel map: 0x%04x\n", LMIC.channelMap);
-#endif		
         // Find next channel in given band
         u1_t chnl = LMIC.bands[band].lastchnl;
 		
@@ -726,20 +710,10 @@ static ostime_t nextTx (ostime_t now) {
             if( (chnl = (chnl+1)) >= MAX_CHANNELS )
                 chnl -=  MAX_CHANNELS;
 
-			//lmic_printf("test channel: %i\n", chnl);
-			//lmic_printf("channelDr: %i\n", (LMIC.channelDrMap[chnl] & (1<<(LMIC.datarate&0xF))));
-			//lmic_printf("band: %i\n", LMIC.channelFreq[chnl] & 0x3);
-			
-			
-			
             if( (LMIC.channelMap & (1<<chnl)) != 0  &&  // channel enabled
                 (LMIC.channelDrMap[chnl] & (1<<(LMIC.datarate&0xF))) != 0  &&
                 band == (LMIC.channelFreq[chnl] & 0x3) ) { // in selected band
                 LMIC.txChnl = LMIC.bands[band].lastchnl = chnl;
-#if LMIC_DEBUG_LEVEL > 0
-				//lmic_printf("*********************");
-				//lmic_printf("channel: %i\n", LMIC.txChnl);
-#endif
                 return mintime;
             }
         }
@@ -954,10 +928,7 @@ static void setBcnRxParams (void) {
 #endif // !DISABLE_BEACONS
 
 static void setRx1Params(void) {
-#if LMIC_DEBUG_LEVEL > 0	
-	lmic_printf("setRx1Params");
-#endif	
-	
+
     s1_t offset;         
     if((LMIC.opmode & OP_JOINING) != 0) {
       //joining
@@ -975,9 +946,6 @@ static void setRx1Params(void) {
       if(LMIC.dndr > DR_SF7CR) LMIC.dndr = DR_SF7CR;                           
     }
 
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("dndr: %i\n", LMIC.dndr);
-#endif
 	LMIC_SET_RPS(dndr2rps(LMIC.dndr));
 }
 
@@ -1122,7 +1090,22 @@ static int decodeBeacon (void) {
 #endif // !DISABLE_BEACONS
 
 
+
+void print_byte_array(const u1_t * array, int length)
+{
+	for(int i=0; i<length; ++i)
+	{
+		lmic_printf("%02x", array[i]);
+	}
+}
+
+
+
 static bit_t decodeFrame (void) {
+#if defined(LMIC_PRINT_LORA)
+	lmic_printf("decodeFrame - len: %i\n", LMIC.dataLen);
+#endif
+	
     xref2u1_t d = LMIC.frame;
     u1_t hdr    = d[0];
     u1_t ftype  = hdr & HDR_FTYPE;
@@ -1170,17 +1153,26 @@ static bit_t decodeFrame (void) {
     int port = -1;
     int replayConf = 0;
 
-    if( pend > poff )
+	if( pend > poff )
         port = d[poff++];
-
+	
     seqno = LMIC.seqnoDn + (u2_t)(seqno - LMIC.seqnoDn);
 
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("key: ");
+	print_byte_array(LMIC.nwkKey, 16);
+	lmic_printf(" devAddr: %lu", LMIC.devaddr);
+	lmic_printf(" seqno: %lu", seqno);
+	lmic_printf(" dn: 1 pend: %i\n", pend);
+#endif
+	
     if( !aes_verifyMic(LMIC.nwkKey, LMIC.devaddr, seqno, /*dn*/1, d, pend) ) {
         EV(spe3Cond, ERR, (e_.reason = EV::spe3Cond_t::CORRUPTED_MIC,
                            e_.eui1   = MAIN::CDEV->getEui(),
                            e_.info1  = Base::lsbf4(&d[pend]),
                            e_.info2  = seqno,
                            e_.info3  = LMIC.devaddr));
+		lmic_printf("bad mic\n");
         goto norx;
     }
     if( seqno < LMIC.seqnoDn ) {
@@ -1189,6 +1181,7 @@ static bit_t decodeFrame (void) {
                                 e_.eui    = MAIN::CDEV->getEui(),
                                 e_.info   = LMIC.seqnoDn,
                                 e_.info2  = seqno));
+			//lmic_printf("too high seq no\n");
             goto norx;
         }
         if( seqno != LMIC.seqnoDn-1 || !LMIC.dnConf || ftype != HDR_FTYPE_DCDN ) {
@@ -1196,6 +1189,7 @@ static bit_t decodeFrame (void) {
                                 e_.eui    = MAIN::CDEV->getEui(),
                                 e_.info   = LMIC.seqnoDn,
                                 e_.info2  = seqno));
+			//lmic_printf("too low seq no\n");
             goto norx;
         }
         // Replay of previous sequence number allowed only if
@@ -1212,11 +1206,18 @@ static bit_t decodeFrame (void) {
         LMIC.seqnoDn = seqno+1;  // next number to be expected
         DO_DEVDB(LMIC.seqnoDn,seqnoDn);
         // DN frame requested confirmation - provide ACK once with next UP frame
+		
+
         LMIC.dnConf = (ftype == HDR_FTYPE_DCDN ? FCT_ACK : 0);
     }
 
+	// if confirmed down, or pending data
     if( LMIC.dnConf || (fct & FCT_MORE) )
+	{
         LMIC.opmode |= OP_POLL;
+		// need to increase up sequence no
+		LMIC.seqnoUp++;
+	}
 
     // We heard from network
     LMIC.adrChanged = LMIC.rejoinCnt = 0;
@@ -1432,15 +1433,8 @@ static bit_t decodeFrame (void) {
 
 
 static void setupRx2 (void) {
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("setupRx2\n");
-	lmic_printf("DR: %i\n", LMIC.dn2Dr);
-	lmic_printf("rps: %i\n", dndr2rps(LMIC.dn2Dr));
-#endif	
     LMIC.txrxFlags = TXRX_DNW2;
     //LMIC.rps = dndr2rps(LMIC.dn2Dr);
-	
-	
 	LMIC_SET_RPS(dndr2rps(LMIC.dn2Dr));
     LMIC.freq = LMIC.dn2Freq;
     LMIC.dataLen = 0;
@@ -1488,44 +1482,39 @@ static int rx1DrOffsetTable[] =
 
 
 static void setupRx1 (osjobcb_t func) {
-#if LMIC_DEBUG_LEVEL > 0
+#if defined(LMIC_PRINT_LORA)
 	lmic_printf("setupRx1\n");
 #endif
-	
-	
-	
 	
     LMIC.txrxFlags = TXRX_DNW1;
     // Turn LMIC.rps from TX over to RX
     //LMIC.rps = setNocrc(LMIC.rps,1);
-	
-	
-	
+
 	
 #if defined(CFG_as923)
-	lmic_printf("rx1droffset: %i\n", LMIC.rx1DrOffset);
-
 	ASSERT(LMIC.rx1DrOffset >= 0);
 	ASSERT(LMIC.rx1DrOffset < 8);
 	
-	dr_t txdr = (dr_t)LMIC.datarate;
-	dr_t rx1dr = txdr - rx1DrOffsetTable[LMIC.rx1DrOffset];
-	lmic_printf("rx1dr: %i\n", rx1dr);
-	
-	if(rx1dr > 5)
-		rx1dr = 5;
-	if(rx1dr < 0)
-		rx1dr = 0;
-	lmic_printf("limited [0:5] rx1dr: %i\n", rx1dr);
-	
-	
-	LMIC_SET_RPS(setCr(updr2rps(rx1dr), (cr_t)LMIC.errcr));
-#endif	
-	
-	
-	
-	
+	//if(LMIC.rx1DrOffset != 0)
+	{
+		auto offset = rx1DrOffsetTable[LMIC.rx1DrOffset];
+		//LMIC_SET_RPS(setNocrc(LMIC.rps - offset,1));
+		
+		dr_t txdr = (dr_t)LMIC.datarate;
+		dr_t rx1dr = txdr - rx1DrOffsetTable[LMIC.rx1DrOffset];
+		
+		if(rx1dr > 5)
+			rx1dr = 5;
+		if(rx1dr < 0)
+			rx1dr = 0;
+		lmic_printf("DR: %i RX1DROffset: %i Actual: %i\n", (int)LMIC.datarate, (int)LMIC.rx1DrOffset, (int)rx1dr);
+		
+		//LMIC_SET_RPS(setCr(updr2rps(rx1dr), (cr_t)LMIC.errcr));
+		LMIC_SET_RPS(setNocrc(updr2rps(rx1dr), 1));
+	}
+#else
 	LMIC_SET_RPS(setNocrc(LMIC.rps,1));
+#endif
 	
     LMIC.dataLen = 0;
     LMIC.osjob.func = func;
@@ -1561,8 +1550,94 @@ static void txDone (ostime_t delay, osjobcb_t func) {
 }
 
 
-// ======================================== Join frames
+typedef enum
+{
+	MTYPE_JOIN_REQ=0,
+	MTYPE_JOIN_ACCEPT=1,
+	MTYPE_DATA_UP=2,
+	MTYPE_DATA_DOWN=3,
+	MTYPE_DATA_CONFIRMED_UP=4,
+	MTYPE_DATA_CONFIRMED_DOWN=5,
+	MTYPE_PROP=7
+} MessageType_t;
 
+typedef MessageType_t MessageType;
+
+const char* MessageTypeName[8] = {
+	"JoinRequest",
+	"JoinAccept",
+	"UnconfirmedDataUp",
+	"UnconfirmedDataDown",
+	"ConfirmedDataUp",
+	"ConfirmedDataDown",
+	"RESERVED (rejoin?)",
+	"Proprietary"
+};
+
+// return message type for given header value
+MessageType GetMessageType(u1_t hdr)
+{
+	const int mask = HDR_FTYPE;
+	const int min_bit  = 5;
+	
+	auto bits = (hdr & HDR_FTYPE);
+	auto value = (bits >> min_bit);
+	
+	ASSERT(value >= 0);
+	ASSERT(value < 8);
+	return (MessageType)value;
+}
+
+typedef enum
+{
+	MAJOR_LoRaWAN_R1 = 0,
+} MajorVersion_t;
+
+typedef MajorVersion_t MajorVersion;
+	
+	
+typedef struct MHDR_t
+{
+	MajorVersion Major : 2;
+	unsigned int __RFU : 3;
+	MessageType MType : 3;
+} MHDR;
+
+
+	
+	
+	
+
+#if defined(LMIC_PRINT_LORA)
+void print_frame_info()
+{
+	auto lora_hdr = LMIC.frame[0];
+	auto lora_len = LMIC.dataLen;
+	
+	lmic_printf("FrameInfo: Len=%lu HDR=0x%02x\n", lora_len, lora_hdr);
+	
+	auto mtype = GetMessageType(lora_hdr);
+	ASSERT(mtype >= 0);
+	ASSERT(mtype < 8);	
+	lmic_printf("MessageType: %s\n", MessageTypeName[mtype]);
+	
+	
+	MHDR* hdr = (MHDR*)&LMIC.frame;
+	auto ver = hdr->Major;
+	auto type = hdr->MType;
+	
+	lmic_printf("MessageType: %s\n", MessageTypeName[type]);
+	lmic_printf("Version: %s - ", ver);
+	if(ver == MAJOR_LoRaWAN_R1)
+		lmic_printf("VALID!\n");
+	else
+		lmic_printf(" invalid!\n");
+	
+}
+#endif
+
+
+// ======================================== Join frames
 
 #if !defined(DISABLE_JOIN)
 static void onJoinFailed (xref2osjob_t osjob) {
@@ -1575,17 +1650,10 @@ static bit_t processJoinAccept (void) {
     ASSERT(LMIC.txrxFlags != TXRX_DNW1 || LMIC.dataLen != 0);
     ASSERT((LMIC.opmode & OP_TXRXPEND)!=0);
 
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("processJoinAccept\n");
-	lmic_printf("len: %i\n", LMIC.dataLen);
-	
-	for(int i=0; i<LMIC.dataLen; ++i)
-	{
-		lmic_printf("%02x", LMIC.frame[i]);
-	}
-	lmic_printf("\n");
+#if defined(LMIC_PRINT_LORA)
+	lmic_printf("processJoinAccept: dataLen: %i\n", LMIC.dataLen);
 #endif
-	
+
     if( LMIC.dataLen == 0 ) {
       nojoinframe:
         if( (LMIC.opmode & OP_JOINING) == 0 ) {
@@ -1616,6 +1684,14 @@ static bit_t processJoinAccept (void) {
     u1_t hdr  = LMIC.frame[0];
     u1_t dlen = LMIC.dataLen;
     u4_t mic  = os_rlsbf4(&LMIC.frame[dlen-4]); // safe before modified by encrypt!
+	
+
+//  	
+//	auto valid_length = (dlen == LEN_JA || dlen == LEN_JAEXT);
+//	auto valid_major = (hdr & (HDR_FTYPE|HDR_MAJOR)) == (HDR_FTYPE_JACCC|HDR_MAJOR_V1);
+//	if(!valid_length && !valid_major)
+	
+
     if( (dlen != LEN_JA && dlen != LEN_JAEXT)
         || (hdr & (HDR_FTYPE|HDR_MAJOR)) != (HDR_FTYPE_JACC|HDR_MAJOR_V1) ) {
         EV(specCond, ERR, (e_.reason = EV::specCond_t::UNEXPECTED_FRAME,
@@ -1624,15 +1700,29 @@ static bit_t processJoinAccept (void) {
                            e_.info2  = hdr + (dlen<<8)));
       badframe:
         if( (LMIC.txrxFlags & TXRX_DNW1) != 0 )
+		{
+			lmic_printf("badframe\n");
             return 0;
+		}
         goto nojoinframe;
     }
     aes_encrypt(LMIC.frame+1, dlen-1);
     if( !aes_verifyMic0(LMIC.frame, dlen-4) ) {
+		lmic_printf("bad mic\n");
         EV(specCond, ERR, (e_.reason = EV::specCond_t::JOIN_BAD_MIC,
                            e_.info   = mic));
         goto badframe;
     }
+	
+#if defined(LMIC_PRINT_LORA)
+	print_frame_info();
+#endif
+	
+	
+	
+	
+	
+	/*
 
 #if LMIC_DEBUG_LEVEL > 0
 	lmic_printf("dlen: %i\n", dlen);
@@ -1650,7 +1740,7 @@ static bit_t processJoinAccept (void) {
 	lmic_printf("DevAddr: %02x%02x%02x%02x\n", LMIC.frame[7], LMIC.frame[8], LMIC.frame[9], LMIC.frame[10]);
 	lmic_printf("DLSettings: %02x\n", LMIC.frame[11]);
 	lmic_printf("RxDelay: %02x\n", LMIC.frame[12]);
-#endif	
+#endif	*/
 	
 	
     u4_t addr = os_rlsbf4(LMIC.frame+OFF_JA_DEVADDR);
@@ -1813,6 +1903,8 @@ static void updataDone (xref2osjob_t osjob) {
 
 
 static void buildDataFrame (void) {
+	lmic_printf("BuildDataFrame: ");
+	
     bit_t txdata = ((LMIC.opmode & (OP_TXDATA|OP_POLL)) != OP_POLL);
     u1_t dlen = txdata ? LMIC.pendTxLen : 0;
 
@@ -1891,15 +1983,45 @@ static void buildDataFrame (void) {
         flen = end+4;
     }
     LMIC.frame[OFF_DAT_HDR] = HDR_FTYPE_DAUP | HDR_MAJOR_V1;
+	
+
+	
+	/*
     LMIC.frame[OFF_DAT_FCT] = (LMIC.dnConf | LMIC.adrEnabled
                               | (LMIC.adrAckReq >= 0 ? FCT_ADRARQ : 0)
                               | (end-OFF_DAT_OPTS));
+							  */
+							  
+	LMIC.frame[OFF_DAT_FCT] = (LMIC.adrEnabled
+                              | (LMIC.adrAckReq >= 0 ? FCT_ADRARQ : 0)
+                              | (end-OFF_DAT_OPTS));
+							  
+	if(LMIC.dnConf)
+		LMIC.frame[OFF_DAT_FCT] |= (1 << 5);
+	
+#if defined(LMIC_PRINT_LORA)
+	if((LMIC.frame[OFF_DAT_FCT] & FCT_ACK) != 0)
+	{
+		lmic_printf("acknowledging confirmed dn\n");
+
+		xref2u1_t d = LMIC.frame;
+		u4_t seqno = os_rlsbf2(&d[OFF_DAT_SEQNO]);
+		
+		lmic_printf("FCnt: %lu\n", seqno);		
+	}
+#endif
+							  
+							  
     os_wlsbf4(LMIC.frame+OFF_DAT_ADDR,  LMIC.devaddr);
 
+	
+	lmic_printf("txCnt: %02x\n", LMIC.txCnt);
+	
     if( LMIC.txCnt == 0 ) {
         LMIC.seqnoUp += 1;
         DO_DEVDB(LMIC.seqnoUp,seqnoUp);
     } else {
+		lmic_printf("error?\n");
         EV(devCond, INFO, (e_.reason = EV::devCond_t::RE_TX,
                            e_.eui    = MAIN::CDEV->getEui(),
                            e_.info   = LMIC.seqnoUp-1,
@@ -1910,6 +2032,9 @@ static void buildDataFrame (void) {
     os_wlsbf2(LMIC.frame+OFF_DAT_SEQNO, LMIC.seqnoUp-1);
 
     // Clear pending DN confirmation
+#if LMIC_DEBUG_LEVEL > 0
+	lmic_printf("************* CLEAR DN CONF **********\n");
+#endif
     LMIC.dnConf = 0;
 
     if( txdata ) {
@@ -1938,6 +2063,8 @@ static void buildDataFrame (void) {
                        e_.opts.length = end-LORA::OFF_DAT_OPTS,
                        memcpy(&e_.opts[0], LMIC.frame+LORA::OFF_DAT_OPTS, end-LORA::OFF_DAT_OPTS)));
     LMIC.dataLen = flen;
+	
+	print_frame_info();
 }
 
 

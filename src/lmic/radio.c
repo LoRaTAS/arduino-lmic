@@ -564,11 +564,11 @@ static CONST_TABLE(u1_t, rxlorairqmask)[] = {
 
 // start LoRa receiver (time=LMIC.rxtime, timeout=LMIC.rxsyms, result=LMIC.frame[LMIC.dataLen])
 static void rxlora (u1_t rxmode) {
-#if defined LMIC_DEBUG_LEVEL > 0
-	lmic_printf("rxlora: %i\n", rxmode);
+#if defined(LMIC_PRINT_LORA)
+	lmic_printf("rxlora\n");
 #endif
-	
-    // select LoRa modem (from sleep mode)
+
+	// select LoRa modem (from sleep mode)
     opmodeLora();
     ASSERT((readReg(RegOpMode) & OPMODE_LORA) != 0);
     // enter standby mode (warm up))
@@ -685,10 +685,6 @@ static void rxfsk (u1_t rxmode) {
 }
 
 static void startrx (u1_t rxmode) {
-#if LMIC_DEBUG_LEVEL > 0
-	lmic_printf("startrx: %i\n", rxmode);
-#endif
-	
     ASSERT( (readReg(RegOpMode) & OPMODE_MASK) == OPMODE_SLEEP );
     if(getSf(LMIC.rps) == FSK) { // FSK modem
         rxfsk(rxmode);
@@ -812,16 +808,16 @@ void radio_irq_handler (u1_t dio) {
             // read the PDU and inform the MAC that we received something
             LMIC.dataLen = (readReg(LORARegModemConfig1) & SX1272_MC1_IMPLICIT_HEADER_MODE_ON) ?
                 readReg(LORARegPayloadLength) : readReg(LORARegRxNbBytes);
+				
+#if defined(LMIC_PRINT_LORA)
+			lmic_printf("RXDone: DataLen: %i Data: ", (int)LMIC.dataLen);
+			print_data(LMIC.frame, LMIC.dataLen);
+#endif
+				
             // set FIFO read address pointer
             writeReg(LORARegFifoAddrPtr, readReg(LORARegFifoRxCurrentAddr));
             // now read the FIFO
             readBuf(RegFifo, LMIC.frame, LMIC.dataLen);
-			
-			
-#if LMIC_DEBUG_LEVEL > 0
-			lmic_printf("rxlora received: dataLen=%i\n", LMIC.dataLen);
-			print_data(LMIC.frame, LMIC.dataLen);
-#endif
 			
             // read rx quality parameters
             LMIC.snr  = readReg(LORARegPktSnrValue); // SNR [dB] * 4

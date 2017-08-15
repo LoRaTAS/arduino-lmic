@@ -37,12 +37,22 @@
 #define US_PER_OSTICK (1 << US_PER_OSTICK_EXPONENT)
 #define OSTICKS_PER_SEC (1000000 / US_PER_OSTICK)
 
+
+// print LoRa logic/flow
+#define LMIC_PRINT_LORA 1
+
+
+
 // Set this to 1 to enable some basic debug output (using printf) about
 // RF settings used during transmission and reception. Set to 2 to
 // enable more verbose output. Make sure that printf is actually
 // configured (e.g. on AVR it is not by default), otherwise using it can
 // cause crashing.
+#if defined(__AVR)
+#define LMIC_DEBUG_LEVEL 0
+#else
 #define LMIC_DEBUG_LEVEL 2
+#endif
 
 // Enable this to allow using printf() to print to the given serial port
 // (or any other Print object). This can be easy for debugging. The
