@@ -758,6 +758,8 @@ static ostime_t nextJoinState (void) {
     // If both fail try next lower datarate
     if( ++LMIC.txChnl == 3 )
         LMIC.txChnl = 0;
+	
+	// need new logic for trying lower DR on failure
     if( (++LMIC.txCnt & 1) == 0 ) {
         // Lower DR every 2nd try (having tried 868.x and 864.x with the same DR)
         if( LMIC.datarate == DR_SF12 )
@@ -765,6 +767,7 @@ static ostime_t nextJoinState (void) {
         else
             setDrJoin(DRCHG_NOJACC, decDR((dr_t)LMIC.datarate));
     }
+	
     // Clear NEXTCHNL because join state engine controls channel hopping
     LMIC.opmode &= ~OP_NEXTCHNL;
     // Move txend to randomize synchronized concurrent joins.
@@ -1216,7 +1219,6 @@ static bit_t decodeFrame (void) {
 	{
         LMIC.opmode |= OP_POLL;
 		// need to increase up sequence no
-		LMIC.seqnoUp++;
 	}
 
     // We heard from network
@@ -2017,19 +2019,31 @@ static void buildDataFrame (void) {
 	
 	lmic_printf("txCnt: %02x\n", LMIC.txCnt);
 	
-    if( LMIC.txCnt == 0 ) {
+	// always increment seqNo
+	LMIC.seqnoUp += 1;
+    DO_DEVDB(LMIC.seqnoUp,seqnoUp);
+	
+/*	
+    if( LMIC.txCnt == 0 )
+	{
         LMIC.seqnoUp += 1;
         DO_DEVDB(LMIC.seqnoUp,seqnoUp);
-    } else {
-		lmic_printf("error?\n");
-        EV(devCond, INFO, (e_.reason = EV::devCond_t::RE_TX,
-                           e_.eui    = MAIN::CDEV->getEui(),
-                           e_.info   = LMIC.seqnoUp-1,
-                           e_.info2  = ((LMIC.txCnt+1) |
-                                        (TABLE_GET_U1(DRADJUST, LMIC.txCnt+1) << 8) |
-                                        ((LMIC.datarate|DR_PAGE)<<16))));
     }
+	else
+*/
+	{
+		lmic_printf("error?\n");
+		EV(devCond, INFO, (e_.reason = EV::devCond_t::RE_TX,
+						   e_.eui    = MAIN::CDEV->getEui(),
+						   e_.info   = LMIC.seqnoUp-1,
+						   e_.info2  = ((LMIC.txCnt+1) |
+										(TABLE_GET_U1(DRADJUST, LMIC.txCnt+1) << 8) |
+										((LMIC.datarate|DR_PAGE)<<16))));
+    }
+	
     os_wlsbf2(LMIC.frame+OFF_DAT_SEQNO, LMIC.seqnoUp-1);
+	lmic_printf("FCnt: %i\n", LMIC.frame[OFF_DAT_SEQNO]);
+	
 
     // Clear pending DN confirmation
 #if LMIC_DEBUG_LEVEL > 0
@@ -2041,7 +2055,11 @@ static void buildDataFrame (void) {
         if( LMIC.pendTxConf ) {
             // Confirmed only makes sense if we have a payload (or at least a port)
             LMIC.frame[OFF_DAT_HDR] = HDR_FTYPE_DCUP | HDR_MAJOR_V1;
-            if( LMIC.txCnt == 0 ) LMIC.txCnt = 1;
+            if( LMIC.txCnt == 0 ) 
+			{
+				lmic_printf("Changing TX CNT to 1\n");
+				LMIC.txCnt = 1;
+			}
         }
         LMIC.frame[end] = LMIC.pendTxPort;
         os_copyMem(LMIC.frame+end+1, LMIC.pendTxData, dlen);

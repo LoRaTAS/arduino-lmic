@@ -259,7 +259,10 @@ struct lmic_t {
 #endif
 
     // Public part of MAC state
-    u1_t        txCnt;
+    
+	// cannot retransmit same frame
+	u1_t        txCnt;
+	
     u1_t        txrxFlags;  // transaction flags (TX-RX combo)
     u1_t        dataBeg;    // 0 or start of data (dataBeg-1 is port)
     u1_t        dataLen;    // 0 no data or zero length data, >0 byte count of data
