@@ -111,15 +111,7 @@ struct bcninfo_t {
 //#define PRINT_RPS_CHANGE
 
 
-#if defined(PRINT_RPS_CHANGE)
-// trace to see where RPS is being set
-void __lmic_set_rps(int x, const char* file, int line);
-#define LMIC_SET_RPS(x) __lmic_set_rps(x, __FILE__, __LINE__)
-#else
-#define LMIC_SET_RPS(x) LMIC.rps = x
-#endif
-
-
+void lmic_set_rps(rps_t x);
 
 // purpose of receive window - lmic_t.rxState
 enum { RADIO_RST=0, RADIO_TX=1, RADIO_RX=2, RADIO_RXON=3 };

@@ -39,7 +39,8 @@
 
 
 // print LoRa logic/flow
-#define LMIC_PRINT_LORA 1
+
+//#define LMIC_PRINT_LORA
 
 
 
@@ -51,7 +52,7 @@
 #if defined(__AVR)
 #define LMIC_DEBUG_LEVEL 0
 #else
-#define LMIC_DEBUG_LEVEL 2
+#define LMIC_DEBUG_LEVEL 0
 #endif
 
 // Enable this to allow using printf() to print to the given serial port

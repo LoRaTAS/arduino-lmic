@@ -484,10 +484,8 @@ static inline void print_data(unsigned char* data, size_t len)
 #endif
 
 static void txlora () {
-#if defined LMIC_DEBUG_LEVEL > 0
-	lmic_printf("txlora\n");
-	print_data(LMIC.frame, LMIC.dataLen);
-#endif
+    lmic_printf("Transmitting: ");
+    print_data(LMIC.frame, LMIC.dataLen);
 	
     // select LoRa modem (from sleep mode)
     //writeReg(RegOpMode, OPMODE_LORA);
